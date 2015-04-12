@@ -13,7 +13,7 @@ import traceback
 import gobject
 import math
 import array
-
+import cairo
 
 """
     AnimationWindow
@@ -28,8 +28,8 @@ class AnimationWindow(gtk.Window):
         self.img = img
         #self.animationSequence = [0, 1, 2, 3, 2, 1]
         self.frameId = 0;
-        self.framesPerRow = 8;
-        self.framesPerCol = 2;
+        self.framesPerRow = 9;
+        self.framesPerCol = 4;
         # TODO: Use the size of the selection
         # pdb.gimp_selection_bounds(self.img)
 
@@ -71,17 +71,21 @@ class AnimationWindow(gtk.Window):
         preview_width = thumbnail[0]
         preview_height = thumbnail[1]
         wnd = da.window
-        gc = wnd.new_gc()
         preview_x = (da_width - preview_width) / 2
         preview_y = (da_height - preview_height) / 2
 
         # Select the drawing function depending on the number of bytes per pixel
         if bpp == 1:
-            wnd.draw_gray_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
+            wnd.draw_gray_image(wnd.new_gc(), preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
         elif bpp == 3:
-            wnd.draw_rgb_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
+            wnd.draw_rgb_image(wnd.new_gc(), preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
         elif bpp == 4:
-            wnd.draw_rgb_32_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
+            # Use cairo because draw_rgb_32_image doesn't handle transparency
+            pixbuf = gtk.gdk.pixbuf_new_from_data(buf, gtk.gdk.COLORSPACE_RGB, True, 8, preview_width, preview_height, preview_width * bpp)
+            cr = wnd.cairo_create()
+            cr.set_source_pixbuf(pixbuf, preview_x, preview_y)
+            cr.paint()
+            #wnd.draw_rgb_32_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
 
 
     """
@@ -95,8 +99,10 @@ class AnimationWindow(gtk.Window):
             # Calculate the position of the frame to draw in the layer
             x = self.frameWidth * (self.animationSequence[self.frameId] % self.framesPerRow)
             y = self.frameHeight * int(math.floor((self.animationSequence[self.frameId] + 0.0) / self.framesPerRow))
-
-            self.draw_part_of_layer(da, self.img.active_layer, x, y, self.frameWidth, self.frameHeight)
+            # Draw all the visible layer to make the animation
+            for layer in reversed(self.img.layers):
+                if layer.visible:
+                    self.draw_part_of_layer(da, layer, x, y, self.frameWidth, self.frameHeight)
         except:
             pdb.gimp_message("Error : " + traceback.format_exc())
 
