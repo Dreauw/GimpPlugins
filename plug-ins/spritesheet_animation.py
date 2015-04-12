@@ -101,7 +101,7 @@ class AnimationWindow(gtk.Window):
             y = self.frameHeight * int(math.floor((self.animationSequence[self.frameId] + 0.0) / self.framesPerRow))
             # Draw all the visible layer to make the animation
             for layer in reversed(self.img.layers):
-                if layer.visible:
+                if layer.visible and layer.width >= x + self.frameWidth and layer.height >= y + self.frameHeight:
                     self.draw_part_of_layer(da, layer, x, y, self.frameWidth, self.frameHeight)
         except:
             pdb.gimp_message("Error : " + traceback.format_exc())
