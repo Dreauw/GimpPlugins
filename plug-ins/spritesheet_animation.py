@@ -36,20 +36,36 @@ class AnimationWindow(gtk.Window):
         self.frameWidth = self.img.width / self.framesPerRow
         self.frameHeight = self.img.height / self.framesPerCol
         self.animationSequence = []
+        self.started = True
 
         for i in range(self.framesPerRow * self.framesPerCol):
             self.animationSequence.append(i)
 
+        # Box to position the widgets
+        self.vbox = gtk.VBox(False, 0)
+
         # Drawing area of the animation
         self.preview = gtk.DrawingArea()
+        # Button to start/stop the animation
+        self.control_btn = gtk.Button("Stop")
+
         r =  gtk.Window.__init__(self, *args)
         self.preview.show()
-        self.add(self.preview)
+        self.vbox.pack_start(self.preview)
+
+        self.control_btn.show()
+        self.vbox.pack_end(self.control_btn, False, False)
+
+        self.vbox.show()
+        self.add(self.vbox)
 
         self.preview.connect("expose-event", self.on_expose)
 
         self.connect("destroy", gtk.main_quit)
+        self.control_btn.connect("clicked", self.on_control_click)
 
+        self.set_title("Spritesheet animation")
+        self.resize(150, 200)
         self.show()
         self.set_keep_above(True)
 
@@ -87,6 +103,13 @@ class AnimationWindow(gtk.Window):
             cr.paint()
             #wnd.draw_rgb_32_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
 
+    """
+        Called when the control button is clicked
+        btn : The button clicked
+    """
+    def on_control_click(self, btn):
+        self.started = not self.started
+        btn.set_label("Stop" if self.started else "Start")
 
     """
         Called when the DrawingArea of the animation need to be re-drawn
@@ -112,10 +135,11 @@ class AnimationWindow(gtk.Window):
     def update(self, *args):
         # Catch error because this method is called from gtk
         try:
-            # Increment the frameId
-            self.frameId = (self.frameId + 1) % (self.framesPerRow * self.framesPerCol)
-            # Ask to redraw
-            self.preview.queue_draw()
+            if self.started:
+                # Increment the frameId
+                self.frameId = (self.frameId + 1) % (self.framesPerRow * self.framesPerCol)
+                # Ask to redraw
+                self.preview.queue_draw()
 
             # Call this function again later
             gobject.timeout_add(200, self.update, self)
