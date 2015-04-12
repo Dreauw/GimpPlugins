@@ -30,7 +30,11 @@ class AnimationPreview(gtk.DrawingArea):
     def __init__(self, img, frames_per_row=4, frames_per_col=1):
         self.img = img
         self.set_number_frame(frames_per_row, frames_per_col)
-        #self.animationSequence = [0, 1, 2, 3, 2, 1]
+        self.animationSequence = []
+
+        for i in range(self.framesPerRow * self.framesPerCol):
+            self.animationSequence.append(i)
+
         self.frameId = 0;
         self.started = True
         self.delay = int(1.0 / (50.0 / 10000.0))
@@ -63,11 +67,6 @@ class AnimationPreview(gtk.DrawingArea):
 
         self.frameWidth = cwidth / self.framesPerRow
         self.frameHeight = cheight / self.framesPerCol
-
-        self.animationSequence = []
-
-        for i in range(self.framesPerRow * self.framesPerCol):
-            self.animationSequence.append(i)
 
 
     """
@@ -137,7 +136,7 @@ class AnimationPreview(gtk.DrawingArea):
         try:
             if self.started:
                 # Increment the frameId
-                self.frameId = (self.frameId + 1) % (self.framesPerRow * self.framesPerCol)
+                self.frameId = (self.frameId + 1) % len(self.animationSequence)
                 # Ask to redraw
                 self.queue_draw()
 
@@ -273,7 +272,7 @@ class ConfigurationWindow(gtk.Window):
         self.preview.show()
         self.vbox.pack_start(self.preview)
 
-
+        # Spinners
         self.frames_per_row_adjustement = gtk.Adjustment(4, 1, 200, 1, 1)
         self.frames_per_row_spinner = gtk.SpinButton(self.frames_per_row_adjustement)
         self.frames_per_row_spinner.set_value(4)
@@ -281,6 +280,10 @@ class ConfigurationWindow(gtk.Window):
         self.frames_per_col_adjustement = gtk.Adjustment(1, 1, 200, 1, 1)
         self.frames_per_col_spinner = gtk.SpinButton(self.frames_per_col_adjustement)
         self.frames_per_col_spinner.set_value(1)
+
+        # TextField for animation sequence
+        self.sequence_entry = gtk.Entry()
+        self.sequence_entry.set_text(" ".join(map(str, self.preview.animationSequence)))
 
         self.cancel_btn.show()
         self.ok_btn.show()
@@ -290,6 +293,8 @@ class ConfigurationWindow(gtk.Window):
 
         self.vbox.pack_end(self.hbox, False, False, 10)
 
+
+        self.add_widget_line(self.vbox, "Animation sequence", self.sequence_entry)
         self.add_widget_line(self.vbox, "Number of frames per column", self.frames_per_col_spinner)
         self.add_widget_line(self.vbox, "Number of frames per row", self.frames_per_row_spinner)
 
@@ -297,19 +302,28 @@ class ConfigurationWindow(gtk.Window):
         self.add(self.vbox)
 
 
+        self.sequence_edited = False
+
         self.frames_per_row_adjustement.connect("value_changed", self.on_config_changed)
         self.frames_per_col_adjustement.connect("value_changed", self.on_config_changed)
+        self.sequence_entry.connect("changed", self.on_sequence_changed)
 
         self.connect("destroy", gtk.main_quit)
         self.ok_btn.connect("clicked", self.on_ok_clicked)
         self.cancel_btn.connect("clicked", gtk.main_quit)
 
         self.set_title("Spritesheet animation")
-        self.resize(150, 200)
+        self.resize(150, 250)
         self.show()
         self.set_keep_above(True)
 
         return r
+
+    def on_sequence_changed(self, entry):
+        self.sequence_edited = True
+        seq_str = entry.get_text()
+        self.preview.animationSequence = map(int, seq_str.split(" "))
+        # TODO : Check syntax and number range
 
     """
         Called when the OK button is clicked
@@ -328,7 +342,24 @@ class ConfigurationWindow(gtk.Window):
         widget : The widget that has ben modified
     """
     def on_config_changed(self, widget):
-        self.preview.set_number_frame(self.frames_per_row_spinner.get_value_as_int(), self.frames_per_col_spinner.get_value_as_int())
+        try:
+            nb_row = self.frames_per_row_spinner.get_value_as_int()
+            nb_col = self.frames_per_col_spinner.get_value_as_int()
+            self.preview.set_number_frame(nb_row, nb_col)
+            # Automatically generate the animation sequence
+            if (not self.sequence_edited):
+                seq_str = ""
+                sequence = []
+                for i in range(nb_row * nb_col):
+                    seq_str += str(i) + " "
+                    sequence.append(i)
+
+                self.sequence_entry.set_text(seq_str)
+                self.sequence_edited = False
+                self.preview.animationSequence = sequence
+        except:
+            pdb.gimp_message("Error : " + traceback.format_exc())
+
 
     """
         Add a widget with a label
