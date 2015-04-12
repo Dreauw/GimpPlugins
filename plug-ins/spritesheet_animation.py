@@ -15,16 +15,8 @@ import math
 import array
 import cairo
 
-"""
-    AnimationWindow
-    A window playing a spritesheet animation
-"""
-class AnimationWindow(gtk.Window):
-    """
-        Constructor
-        img : Image with the spritesheet
-    """
-    def __init__ (self, img, *args):
+class AnimationPreview(gtk.DrawingArea):
+    def __init__(self, img):
         self.img = img
         #self.animationSequence = [0, 1, 2, 3, 2, 1]
         self.frameId = 0;
@@ -50,50 +42,10 @@ class AnimationWindow(gtk.Window):
         for i in range(self.framesPerRow * self.framesPerCol):
             self.animationSequence.append(i)
 
-        # Box to position the widgets
-        self.vbox = gtk.VBox(False, 0)
-        self.hbox = gtk.HBox(False, 5)
+        r =  gtk.DrawingArea.__init__(self)
 
-        # Drawing area of the animation
-        self.preview = gtk.DrawingArea()
-        # Button to start/stop the animation
-        self.control_btn = gtk.Button("Stop")
-        # Spinner to control the speed of the animation
-        self.delay_label = gtk.Label("   Speed")
-        self.delay_adjustement = gtk.Adjustment(50, 1, 500, 1, 10)
-        self.delay_spinner = gtk.SpinButton(self.delay_adjustement)
-        self.delay_spinner.set_value(50)
 
-        r =  gtk.Window.__init__(self, *args)
-        self.preview.show()
-        self.vbox.pack_start(self.preview)
-
-        self.control_btn.show()
-        self.hbox.pack_start(self.control_btn)
-
-        self.delay_spinner.show()
-        self.hbox.pack_end(self.delay_spinner)
-
-        self.delay_label.show()
-        self.hbox.pack_end(self.delay_label, False, False)
-
-        self.hbox.show()
-        self.vbox.pack_end(self.hbox, False, False)
-
-        self.vbox.show()
-        self.add(self.vbox)
-
-        self.preview.connect("expose-event", self.on_expose)
-
-        self.delay_adjustement.connect("value_changed", self.on_delay_changed)
-
-        self.connect("destroy", gtk.main_quit)
-        self.control_btn.connect("clicked", self.on_control_click)
-
-        self.set_title("Spritesheet animation")
-        self.resize(150, 200)
-        self.show()
-        self.set_keep_above(True)
+        self.connect("expose-event", self.on_expose)
 
         self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
         return r
@@ -140,29 +92,6 @@ class AnimationWindow(gtk.Window):
             #wnd.draw_rgb_32_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
 
     """
-        Called when the speed is modified
-        adjustement : The adjustement of the modified spinner
-    """
-    def on_delay_changed(self, adjustement):
-        self.delay = int(1.0 / (adjustement.get_value() / 10000.0))
-
-        # Needed to apply the modification immediately
-        if self.started:
-            # Remove the active timeout
-            gobject.source_remove(self.timeout_id)
-            # Start a new timeout with the new delay
-            self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
-
-
-    """
-        Called when the control button is clicked
-        btn : The button clicked
-    """
-    def on_control_click(self, btn):
-        self.started = not self.started
-        btn.set_label("Stop" if self.started else "Start")
-
-    """
         Called when the DrawingArea of the animation need to be re-drawn
         da : DrawingArea
         event : The event
@@ -190,13 +119,98 @@ class AnimationWindow(gtk.Window):
                 # Increment the frameId
                 self.frameId = (self.frameId + 1) % (self.framesPerRow * self.framesPerCol)
                 # Ask to redraw
-                self.preview.queue_draw()
+                self.queue_draw()
 
             # Call this function again later
             self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
 
         except:
             pdb.gimp_message("Error : " + traceback.format_exc())
+
+
+
+
+"""
+    AnimationWindow
+    A window playing a spritesheet animation
+"""
+class AnimationWindow(gtk.Window):
+    """
+        Constructor
+        img : Image with the spritesheet
+    """
+    def __init__ (self, img, *args):
+        self.img = img
+
+        # Box to position the widgets
+        self.vbox = gtk.VBox(False, 0)
+        self.hbox = gtk.HBox(False, 5)
+
+        # Drawing area of the animation
+        self.preview = AnimationPreview(self.img)
+        # Button to start/stop the animation
+        self.control_btn = gtk.Button("Stop")
+        # Spinner to control the speed of the animation
+        self.delay_label = gtk.Label("   Speed")
+        self.delay_adjustement = gtk.Adjustment(50, 1, 500, 1, 10)
+        self.delay_spinner = gtk.SpinButton(self.delay_adjustement)
+        self.delay_spinner.set_value(50)
+
+        r =  gtk.Window.__init__(self, *args)
+        self.preview.show()
+        self.vbox.pack_start(self.preview)
+
+        self.control_btn.show()
+        self.hbox.pack_start(self.control_btn)
+
+        self.delay_spinner.show()
+        self.hbox.pack_end(self.delay_spinner)
+
+        self.delay_label.show()
+        self.hbox.pack_end(self.delay_label, False, False)
+
+        self.hbox.show()
+        self.vbox.pack_end(self.hbox, False, False)
+
+        self.vbox.show()
+        self.add(self.vbox)
+
+
+        self.delay_adjustement.connect("value_changed", self.on_delay_changed)
+
+        self.connect("destroy", gtk.main_quit)
+        self.control_btn.connect("clicked", self.on_control_click)
+
+        self.set_title("Spritesheet animation")
+        self.resize(150, 200)
+        self.show()
+        self.set_keep_above(True)
+
+        return r
+
+    """
+        Called when the speed is modified
+        adjustement : The adjustement of the modified spinner
+    """
+    def on_delay_changed(self, adjustement):
+        self.preview.delay = int(1.0 / (adjustement.get_value() / 10000.0))
+
+        # Needed to apply the modification immediately
+        if self.preview.started:
+            # Remove the active timeout
+            gobject.source_remove(self.preview.timeout_id)
+            # Start a new timeout with the new delay
+            self.preview.timeout_id = gobject.timeout_add(self.preview.delay, self.preview.update, self)
+
+
+    """
+        Called when the control button is clicked
+        btn : The button clicked
+    """
+    def on_control_click(self, btn):
+        self.preview.started = not self.preview.started
+        btn.set_label("Stop" if self.preview.started else "Start")
+
 
 """
     Start the plugin
@@ -226,7 +240,7 @@ register(
     "_Spritesheet...",
     "RGB*, GRAY*",
     [
-        (PF_IMAGE, "image",       "Input image", None),
+        (PF_IMAGE, "image",       "Input image", None)
     ],
     [],
     spritesheet_animation,
