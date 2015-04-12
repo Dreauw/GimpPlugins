@@ -29,12 +29,20 @@ class AnimationWindow(gtk.Window):
         #self.animationSequence = [0, 1, 2, 3, 2, 1]
         self.frameId = 0;
         self.framesPerRow = 9;
-        self.framesPerCol = 4;
-        # TODO: Use the size of the selection
-        # pdb.gimp_selection_bounds(self.img)
+        self.framesPerCol = 1;
+        exist, x1, y1, x2, y2 = pdb.gimp_selection_bounds(self.img)
+        cwidth = self.img.width
+        cheight = self.img.height
+        self.sx = 0
+        self.sy = 0
+        if exist:
+            cwidth = min(cwidth, x2 - x1)
+            cheight = min(cheight, y2 - y1)
+            self.sx = max(0, x1)
+            self.sy = max(0, y1)
 
-        self.frameWidth = self.img.width / self.framesPerRow
-        self.frameHeight = self.img.height / self.framesPerCol
+        self.frameWidth = cwidth / self.framesPerRow
+        self.frameHeight = cheight / self.framesPerCol
         self.animationSequence = []
         self.started = True
         self.delay = int(1.0 / (50.0 / 10000.0))
@@ -92,7 +100,7 @@ class AnimationWindow(gtk.Window):
 
     """
         Draw a part of layer and scale that part to fit perfectly in
-        the DrawingArea (keeping the aspect ratio)
+        the DrawingArea (keep the aspect ratio)
 
         da : The DrawingArea to draw the layer on
         layer : The layer to draw
@@ -163,8 +171,8 @@ class AnimationWindow(gtk.Window):
         # Catch error because this method is called from gtk
         try:
             # Calculate the position of the frame to draw in the layer
-            x = self.frameWidth * (self.animationSequence[self.frameId] % self.framesPerRow)
-            y = self.frameHeight * int(math.floor((self.animationSequence[self.frameId] + 0.0) / self.framesPerRow))
+            x = self.sx + self.frameWidth * (self.animationSequence[self.frameId] % self.framesPerRow)
+            y = self.sy + self.frameHeight * int(math.floor((self.animationSequence[self.frameId] + 0.0) / self.framesPerRow))
             # Draw all the visible layer to make the animation
             for layer in reversed(self.img.layers):
                 if layer.visible and layer.width >= x + self.frameWidth and layer.height >= y + self.frameHeight:
