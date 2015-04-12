@@ -15,13 +15,41 @@ import math
 import array
 import cairo
 
+
+"""
+    AnimationPreview
+    A widget that can play an animation from a spritesheet
+"""
 class AnimationPreview(gtk.DrawingArea):
-    def __init__(self, img):
+    """
+        Constructor
+        img : The image of the spritesheet of the animation
+        frames_per_row : Number of frames par row on the spritesheet
+        frames_per_col : Number of frames per column on the spritesheet
+    """
+    def __init__(self, img, frames_per_row=4, frames_per_col=1):
         self.img = img
+        self.set_number_frame(frames_per_row, frames_per_col)
         #self.animationSequence = [0, 1, 2, 3, 2, 1]
         self.frameId = 0;
-        self.framesPerRow = 9;
-        self.framesPerCol = 1;
+        self.started = True
+        self.delay = int(1.0 / (50.0 / 10000.0))
+
+        r =  gtk.DrawingArea.__init__(self)
+
+        self.connect("expose-event", self.on_expose)
+
+        self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
+        return r
+
+    """
+        Set the number of frames per row/column
+        frames_per_row : Number of frames par row on the spritesheet
+        frames_per_col : Number of frames per column on the spritesheet
+    """
+    def set_number_frame(self, frames_per_row, frames_per_col):
+        self.framesPerRow = frames_per_row;
+        self.framesPerCol = frames_per_col;
         exist, x1, y1, x2, y2 = pdb.gimp_selection_bounds(self.img)
         cwidth = self.img.width
         cheight = self.img.height
@@ -35,20 +63,12 @@ class AnimationPreview(gtk.DrawingArea):
 
         self.frameWidth = cwidth / self.framesPerRow
         self.frameHeight = cheight / self.framesPerCol
+
         self.animationSequence = []
-        self.started = True
-        self.delay = int(1.0 / (50.0 / 10000.0))
 
         for i in range(self.framesPerRow * self.framesPerCol):
             self.animationSequence.append(i)
 
-        r =  gtk.DrawingArea.__init__(self)
-
-
-        self.connect("expose-event", self.on_expose)
-
-        self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
-        return r
 
     """
         Draw a part of layer and scale that part to fit perfectly in
@@ -138,8 +158,9 @@ class AnimationWindow(gtk.Window):
     """
         Constructor
         img : Image with the spritesheet
+        anim_preview : Widget that play the animation
     """
-    def __init__ (self, img, *args):
+    def __init__ (self, img, anim_preview=None, *args):
         self.img = img
 
         # Box to position the widgets
@@ -148,6 +169,18 @@ class AnimationWindow(gtk.Window):
 
         # Drawing area of the animation
         self.preview = AnimationPreview(self.img)
+        if anim_preview != None:
+            self.preview.sx = anim_preview.sx
+            self.preview.sy = anim_preview.sy
+
+            self.preview.frameWidth = anim_preview.frameWidth
+            self.preview.frameHeight = anim_preview.frameHeight
+
+            self.preview.framesPerRow = anim_preview.framesPerRow
+            self.preview.framesPerCol = anim_preview.framesPerCol
+
+            self.preview.animationSequence = anim_preview.animationSequence
+
         # Button to start/stop the animation
         self.control_btn = gtk.Button("Stop")
         # Spinner to control the speed of the animation
@@ -213,12 +246,119 @@ class AnimationWindow(gtk.Window):
 
 
 """
+    ConfigurationWindow
+    A window to configure the spritesheet animation
+"""
+class ConfigurationWindow(gtk.Window):
+    """
+        Constructor
+        img : Image with the spritesheet
+    """
+    def __init__ (self, img, *args):
+        self.img = img
+
+        # Box to position the widgets
+        self.vbox = gtk.VBox(False, 10)
+        self.hbox = gtk.HBox(False, 0)
+
+        # Drawing area of the animation
+        self.preview = AnimationPreview(self.img)
+
+        # Buttons
+        self.ok_btn = gtk.Button("OK")
+        self.cancel_btn = gtk.Button("Cancel")
+        self.ok_btn.set_size_request(100, 25)
+        self.cancel_btn.set_size_request(100, 25)
+        r =  gtk.Window.__init__(self, *args)
+        self.preview.show()
+        self.vbox.pack_start(self.preview)
+
+
+        self.frames_per_row_adjustement = gtk.Adjustment(4, 1, 200, 1, 1)
+        self.frames_per_row_spinner = gtk.SpinButton(self.frames_per_row_adjustement)
+        self.frames_per_row_spinner.set_value(4)
+
+        self.frames_per_col_adjustement = gtk.Adjustment(1, 1, 200, 1, 1)
+        self.frames_per_col_spinner = gtk.SpinButton(self.frames_per_col_adjustement)
+        self.frames_per_col_spinner.set_value(1)
+
+        self.cancel_btn.show()
+        self.ok_btn.show()
+        self.hbox.pack_end(self.cancel_btn, True, False)
+        self.hbox.pack_start(self.ok_btn, True, False)
+        self.hbox.show()
+
+        self.vbox.pack_end(self.hbox, False, False, 10)
+
+        self.add_widget_line(self.vbox, "Number of frames per column", self.frames_per_col_spinner)
+        self.add_widget_line(self.vbox, "Number of frames per row", self.frames_per_row_spinner)
+
+        self.vbox.show()
+        self.add(self.vbox)
+
+
+        self.frames_per_row_adjustement.connect("value_changed", self.on_config_changed)
+        self.frames_per_col_adjustement.connect("value_changed", self.on_config_changed)
+
+        self.connect("destroy", gtk.main_quit)
+        self.ok_btn.connect("clicked", self.on_ok_clicked)
+        self.cancel_btn.connect("clicked", gtk.main_quit)
+
+        self.set_title("Spritesheet animation")
+        self.resize(150, 200)
+        self.show()
+        self.set_keep_above(True)
+
+        return r
+
+    """
+        Called when the OK button is clicked
+        btn : The button clicked
+    """
+    def on_ok_clicked(self, btn):
+        self.destroy()
+        try:
+            r = AnimationWindow(self.img, self.preview)
+        except:
+            pdb.gimp_message("Error : " + traceback.format_exc())
+        gtk.main()
+
+    """
+        Called when the configuration has changed
+        widget : The widget that has ben modified
+    """
+    def on_config_changed(self, widget):
+        self.preview.set_number_frame(self.frames_per_row_spinner.get_value_as_int(), self.frames_per_col_spinner.get_value_as_int())
+
+    """
+        Add a widget with a label
+
+        vbox : The VBox of the window
+        text : The label associated with the widget
+        widget : The widget to add
+    """
+    def add_widget_line(self, vbox, text, widget):
+        hbox = gtk.HBox(self, 5)
+        label = gtk.Label(text)
+
+        label.show()
+        hbox.pack_start(label, padding=10)
+
+        widget.show()
+        hbox.pack_end(widget, padding=10)
+
+        hbox.show()
+        vbox.pack_end(hbox, False, False)
+
+
+
+"""
     Start the plugin
     img : The image of the spritesheet of the animation
 """
 def spritesheet_animation(img):
     try:
-        r = AnimationWindow(img)
+        r = ConfigurationWindow(img)
         gtk.main()
     except:
         # Open a popup and show the error
