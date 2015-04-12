@@ -37,29 +37,47 @@ class AnimationWindow(gtk.Window):
         self.frameHeight = self.img.height / self.framesPerCol
         self.animationSequence = []
         self.started = True
+        self.delay = int(1.0 / (50.0 / 10000.0))
 
         for i in range(self.framesPerRow * self.framesPerCol):
             self.animationSequence.append(i)
 
         # Box to position the widgets
         self.vbox = gtk.VBox(False, 0)
+        self.hbox = gtk.HBox(False, 5)
 
         # Drawing area of the animation
         self.preview = gtk.DrawingArea()
         # Button to start/stop the animation
         self.control_btn = gtk.Button("Stop")
+        # Spinner to control the speed of the animation
+        self.delay_label = gtk.Label("   Speed")
+        self.delay_adjustement = gtk.Adjustment(50, 1, 500, 1, 10)
+        self.delay_spinner = gtk.SpinButton(self.delay_adjustement)
+        self.delay_spinner.set_value(50)
 
         r =  gtk.Window.__init__(self, *args)
         self.preview.show()
         self.vbox.pack_start(self.preview)
 
         self.control_btn.show()
-        self.vbox.pack_end(self.control_btn, False, False)
+        self.hbox.pack_start(self.control_btn)
+
+        self.delay_spinner.show()
+        self.hbox.pack_end(self.delay_spinner)
+
+        self.delay_label.show()
+        self.hbox.pack_end(self.delay_label, False, False)
+
+        self.hbox.show()
+        self.vbox.pack_end(self.hbox, False, False)
 
         self.vbox.show()
         self.add(self.vbox)
 
         self.preview.connect("expose-event", self.on_expose)
+
+        self.delay_adjustement.connect("value_changed", self.on_delay_changed)
 
         self.connect("destroy", gtk.main_quit)
         self.control_btn.connect("clicked", self.on_control_click)
@@ -69,10 +87,20 @@ class AnimationWindow(gtk.Window):
         self.show()
         self.set_keep_above(True)
 
-        gobject.timeout_add(200, self.update, self)
+        self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
         return r
 
+    """
+        Draw a part of layer and scale that part to fit perfectly in
+        the DrawingArea (keeping the aspect ratio)
 
+        da : The DrawingArea to draw the layer on
+        layer : The layer to draw
+        x : Position x of the part of the layer to draw
+        y : Position y of the part of the layer to draw
+        width : The width of the part of the layer to draw
+        height : The height of the part of the layer to draw
+    """
     def draw_part_of_layer(self, da, layer, x, y, width, height):
         # Calculate a size that fit and keep the aspect ratio of the animation
         da_width = da.get_allocation().width
@@ -102,6 +130,21 @@ class AnimationWindow(gtk.Window):
             cr.set_source_pixbuf(pixbuf, preview_x, preview_y)
             cr.paint()
             #wnd.draw_rgb_32_image(gc, preview_x, preview_y, preview_width, preview_height, gtk.gdk.RGB_DITHER_NONE, buf, preview_width * bpp)
+
+    """
+        Called when the speed is modified
+        adjustement : The adjustement of the modified spinner
+    """
+    def on_delay_changed(self, adjustement):
+        self.delay = int(1.0 / (adjustement.get_value() / 10000.0))
+
+        # Needed to apply the modification immediately
+        if self.started:
+            # Remove the active timeout
+            gobject.source_remove(self.timeout_id)
+            # Start a new timeout with the new delay
+            self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
+
 
     """
         Called when the control button is clicked
@@ -142,7 +185,7 @@ class AnimationWindow(gtk.Window):
                 self.preview.queue_draw()
 
             # Call this function again later
-            gobject.timeout_add(200, self.update, self)
+            self.timeout_id = gobject.timeout_add(self.delay, self.update, self)
 
         except:
             pdb.gimp_message("Error : " + traceback.format_exc())
